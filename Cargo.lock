@@ -352,7 +352,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "il2cpp-sym"
+name = "il2cpp_sym"
 version = "0.1.0"
 dependencies = [
  "byteorder",

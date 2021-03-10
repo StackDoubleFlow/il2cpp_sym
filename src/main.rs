@@ -127,13 +127,14 @@ fn main() {
     );
     sym_table_sec.header.addralign = 1;
     str_table_sec.header.offset = 0x6180000;
-    println!("Syncing sections... (This will take some time)");
+
+    println!("Syncing sections");
 
     elf.sections.push(sym_table_sec);
     elf.sections.push(str_table_sec);
     elf.sync_all().unwrap();
 
-    println!("Sections synced");
+    println!("Writing modified ELF");
 
     let output_file = File::create("libil2cpp.sym.so").unwrap();
     elf.to_writer(output_file).unwrap();
