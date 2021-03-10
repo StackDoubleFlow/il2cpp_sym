@@ -1,0 +1,5 @@
+/target
+
+# Test files
+*.so
+metadata.json
