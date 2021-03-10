@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 byteorder = "1.4.2"
-elfkit = { path = "../elfkit" }
+elfkit = { git = "https://github.com/StackDoubleFlow/elfkit" }
 faerie = "0.16.0"
 goblin = "0.3.4"
 pbr = "1.0.4"
