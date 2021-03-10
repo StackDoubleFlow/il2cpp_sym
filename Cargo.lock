@@ -101,9 +101,9 @@ checksum = "560c32574a12a89ecd91f5e742165893f86e3ab98d21f8ea548658eb9eef5f40"
 
 [[package]]
 name = "byteorder"
-version = "1.4.2"
+version = "1.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae44d1a3d5a19df61dd0c8beb138458ac2a53a7ac09eba97d55592540004306b"
+checksum = "14c189c53d098945499cdfa7ecc63567cf3886b3332b312a5b4585d8d3a6a610"
 
 [[package]]
 name = "cfg-if"
@@ -213,7 +213,7 @@ checksum = "e78d4f1cc4ae33bbfc157ed5d5a5ef3bc29227303d595861deb238fcec4e9457"
 [[package]]
 name = "elfkit"
 version = "0.0.6"
-source = "git+https://github.com/StackDoubleFlow/elfkit#ce5889e39554f9d8cc6982f784afe8a5be54234b"
+source = "git+https://github.com/StackDoubleFlow/elfkit#4572e65e2304a2a352a33298f3411b68637e8809"
 dependencies = [
  "ar",
  "bit-vec 0.5.1",
@@ -665,7 +665,7 @@ checksum = "aaaae8f38bb311444cfb7f1979af0bc9240d95795f75f9ceddf6a59b79ceffa0"
 dependencies = [
  "proc-macro2",
  "quote 1.0.9",
- "syn 1.0.62",
+ "syn 1.0.63",
 ]
 
 [[package]]
@@ -685,7 +685,7 @@ checksum = "1800f7693e94e186f5e25a28291ae1570da908aff7d97a095dec1e56ff99069b"
 dependencies = [
  "proc-macro2",
  "quote 1.0.9",
- "syn 1.0.62",
+ "syn 1.0.63",
 ]
 
 [[package]]
@@ -741,9 +741,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "1.0.62"
+version = "1.0.63"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "123a78a3596b24fee53a6464ce52d8ecbf62241e6294c7e7fe12086cd161f512"
+checksum = "8fd9bc7ccc2688b3344c2f48b9b546648b25ce0b20fc717ee7fa7981a8ca9717"
 dependencies = [
  "proc-macro2",
  "quote 1.0.9",
@@ -814,7 +814,7 @@ checksum = "7765189610d8241a44529806d6fd1f2e0a08734313a35d5b3a556f92b381f3c0"
 dependencies = [
  "proc-macro2",
  "quote 1.0.9",
- "syn 1.0.62",
+ "syn 1.0.63",
 ]
 
 [[package]]
