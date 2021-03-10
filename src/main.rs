@@ -5,6 +5,7 @@ use elfkit::{elf::Elf, SectionContent, Strtab, Symbol};
 use serde::Deserialize;
 use std::io::{Read, Seek, SeekFrom};
 use std::fs::File;
+use std::cmp;
 
 #[derive(Deserialize, Debug)]
 struct MDFile {
@@ -37,6 +38,14 @@ struct MDApiMethod {
     name: String,
     #[serde(rename = "signature")]
     sig: String
+}
+
+fn elf_append_section(elf: &mut Elf, mut section: Section) {
+    let last_section = elf.sections.last().unwrap();
+    let last_section_size = cmp::max(last_section.content.size(&elf.header) as u64, last_section.header.size);
+    // Give an extra 500 bytes of space just in case (The string table behind us is going to grow)
+    section.header.offset = last_section.header.offset + last_section_size + 500;
+    elf.sections.push(section);
 }
 
 fn main() {
@@ -110,7 +119,6 @@ fn main() {
         sym_table_len as u32,
     );
     sym_table_sec.header.addralign = 8;
-    sym_table_sec.header.offset = 0x3180000;
 
 
     println!("Creating string table");
@@ -125,13 +133,12 @@ fn main() {
         0,
         0,
     );
-    sym_table_sec.header.addralign = 1;
-    str_table_sec.header.offset = 0x6180000;
+    str_table_sec.header.addralign = 1;
 
     println!("Syncing sections");
 
-    elf.sections.push(sym_table_sec);
-    elf.sections.push(str_table_sec);
+    elf_append_section(&mut elf, sym_table_sec);
+    elf_append_section(&mut elf, str_table_sec);
     elf.sync_all().unwrap();
 
     println!("Writing modified ELF");
