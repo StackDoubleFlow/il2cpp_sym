@@ -1,12 +1,11 @@
 use elfkit::symbol::SymbolSectionIndex;
 use elfkit::types::{SectionFlags, SectionType, SymbolType};
 use elfkit::{elf::Elf, SectionContent, Strtab, Symbol};
-use elfkit::{section::Section, types::SymbolBind};
-use goblin::elf32::section_header;
+use elfkit::{section::Section};
 use serde::Deserialize;
 use std::cmp;
 use std::fs::File;
-use std::io::{Read, Seek, SeekFrom};
+use std::io::{Read, Seek};
 
 #[derive(Deserialize, Debug)]
 struct MDFile {
@@ -56,46 +55,6 @@ where
         section.header.shtype = sec_type;
         section.from_reader(&mut io, None, &elf.header).unwrap();
     }
-}
-
-fn read_il2cpp_symbols() -> Vec<Symbol> {
-    let mut symbols = Vec::new();
-    let mut file = File::open("libil2cpp.dummy.so").unwrap();
-    let mut elf = Elf::from_reader(&mut file).unwrap();
-    elf_load_all_sections(file, &mut elf);
-
-    let strtab_sec = elf
-        .sections
-        .iter()
-        .find(|s| String::from_utf8_lossy(&s.name) == ".strtab")
-        .expect("Cound not find string table in dummy");
-    let strtab = match &strtab_sec.content {
-        SectionContent::Strtab(strtab) => strtab,
-        _ => panic!("The string table in the dummy was not a string table"),
-    };
-
-    let symtab_sec = elf
-        .sections
-        .iter()
-        .find(|s| String::from_utf8_lossy(&s.name) == ".symtab")
-        .expect("Cound not find symbol table in dummy");
-    let symtab = match &symtab_sec.content {
-        SectionContent::Symbols(symtab) => symtab,
-        _ => panic!("The symbol table in the dummy was not a symbol table"),
-    };
-
-    for symbol in symtab {
-        if symbol.shndx == SymbolSectionIndex::Section(10)
-            && symbol.bind == SymbolBind::LOCAL
-            && symbol.stype == SymbolType::FUNC
-        {
-            let mut sym = symbol.clone();
-            sym.name = strtab.get(symbol._name as usize);
-            symbols.push(sym);
-        }
-    }
-
-    symbols
 }
 
 fn elf_append_section(elf: &mut Elf, mut section: Section) {
@@ -166,8 +125,6 @@ fn main() {
         };
         sym_table.push(sym);
     }
-
-    // sym_table.append(&mut read_il2cpp_symbols());
 
     let sym_table_len = sym_table.len();
 
