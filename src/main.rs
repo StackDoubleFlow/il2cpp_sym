@@ -1,11 +1,12 @@
-use elfkit::section::Section;
 use elfkit::symbol::SymbolSectionIndex;
 use elfkit::types::{SectionFlags, SectionType, SymbolType};
 use elfkit::{elf::Elf, SectionContent, Strtab, Symbol};
+use elfkit::{section::Section, types::SymbolBind};
+use goblin::elf32::section_header;
 use serde::Deserialize;
-use std::io::{Read, Seek, SeekFrom};
-use std::fs::File;
 use std::cmp;
+use std::fs::File;
+use std::io::{Read, Seek, SeekFrom};
 
 #[derive(Deserialize, Debug)]
 struct MDFile {
@@ -17,7 +18,9 @@ struct MDFile {
 struct MDAddrMap {
     #[serde(rename = "methodDefinitions")]
     methods: Vec<MDMethod>,
-    apis: Vec<MDApiMethod>
+    apis: Vec<MDApiMethod>,
+    #[serde(rename = "methodInvokers")]
+    method_invokers: Vec<MDApiMethod>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -37,12 +40,75 @@ struct MDApiMethod {
     virtual_addr: String,
     name: String,
     #[serde(rename = "signature")]
-    sig: String
+    sig: String,
+}
+
+fn elf_load_all_sections<R>(mut io: R, elf: &mut Elf)
+where
+    R: Read + Seek,
+{
+    for section in &mut elf.sections {
+        let sec_type = match section.header.shtype.clone() {
+            // Workaround because the lib doesn't support aarch64 so we treat as raw
+            SectionType::RELA => SectionType::NULL,
+            s => s,
+        };
+        section.header.shtype = sec_type;
+        section.from_reader(&mut io, None, &elf.header).unwrap();
+    }
+}
+
+fn read_il2cpp_symbols() -> Vec<Symbol> {
+    let mut symbols = Vec::new();
+    let mut file = File::open("libil2cpp.dummy.so").unwrap();
+    let mut elf = Elf::from_reader(&mut file).unwrap();
+    elf_load_all_sections(file, &mut elf);
+
+    let strtab_sec = elf
+        .sections
+        .iter()
+        .find(|s| String::from_utf8_lossy(&s.name) == ".strtab")
+        .expect("Cound not find string table in dummy");
+    let strtab = match &strtab_sec.content {
+        SectionContent::Strtab(strtab) => strtab,
+        _ => panic!("The string table in the dummy was not a string table"),
+    };
+
+    let symtab_sec = elf
+        .sections
+        .iter()
+        .find(|s| String::from_utf8_lossy(&s.name) == ".symtab")
+        .expect("Cound not find symbol table in dummy");
+    let symtab = match &symtab_sec.content {
+        SectionContent::Symbols(symtab) => symtab,
+        _ => panic!("The symbol table in the dummy was not a symbol table"),
+    };
+
+    for symbol in symtab {
+        if symbol.shndx == SymbolSectionIndex::Section(10)
+            && symbol.bind == SymbolBind::LOCAL
+            && symbol.stype == SymbolType::FUNC
+        {
+            let mut sym = symbol.clone();
+            sym.name = strtab.get(symbol._name as usize);
+            symbols.push(sym);
+        }
+    }
+
+    symbols
 }
 
 fn elf_append_section(elf: &mut Elf, mut section: Section) {
+    if elf.sections.is_empty() {
+        elf.sections.push(section);
+        return;
+    }
+
     let last_section = elf.sections.last().unwrap();
-    let last_section_size = cmp::max(last_section.content.size(&elf.header) as u64, last_section.header.size);
+    let last_section_size = cmp::max(
+        last_section.content.size(&elf.header) as u64,
+        last_section.header.size,
+    );
     // Give an extra 500 bytes of space just in case (The string table behind us is going to grow)
     section.header.offset = last_section.header.offset + last_section_size + 500;
     elf.sections.push(section);
@@ -52,22 +118,7 @@ fn main() {
     let mut orig_file = File::open("libil2cpp.so").unwrap();
     let mut elf = Elf::from_reader(&mut orig_file).unwrap();
 
-    for section in &mut elf.sections {
-        match section.header.shtype {
-            // Workaround because the lib doesn't support aarch64 so we treat as raw
-            SectionType::RELA => {
-                orig_file
-                    .seek(SeekFrom::Start(section.header.offset))
-                    .unwrap();
-                let mut bb = vec![0; section.header.size as usize];
-                orig_file.read_exact(&mut bb).unwrap();
-                section.content = SectionContent::Raw(bb);
-            }
-            _ => {
-                section.from_reader(&orig_file, None, &elf.header).unwrap();
-            }
-        }
-    }
+    elf_load_all_sections(orig_file, &mut elf);
 
     println!("Finished reading ELF");
 
@@ -83,10 +134,10 @@ fn main() {
     for method in md.addr_map.methods {
         let addr = u64::from_str_radix(&method.virtual_addr[2..], 16).unwrap();
         let sym = Symbol {
-            name:  method.sig.as_bytes().to_vec(),
+            name: method.sig.as_bytes().to_vec(),
             stype: SymbolType::FUNC,
             value: addr,
-            shndx: SymbolSectionIndex::Section(10),
+            shndx: SymbolSectionIndex::Section(11),
             ..Default::default()
         };
         sym_table.push(sym);
@@ -95,14 +146,28 @@ fn main() {
     for method in md.addr_map.apis {
         let addr = u64::from_str_radix(&method.virtual_addr[2..], 16).unwrap();
         let sym = Symbol {
-            name:  method.sig.as_bytes().to_vec(),
+            name: method.sig.as_bytes().to_vec(),
             stype: SymbolType::FUNC,
             value: addr,
-            shndx: SymbolSectionIndex::Section(10),
+            shndx: SymbolSectionIndex::Section(11),
             ..Default::default()
         };
         sym_table.push(sym);
     }
+
+    for method in md.addr_map.method_invokers {
+        let addr = u64::from_str_radix(&method.virtual_addr[2..], 16).unwrap();
+        let sym = Symbol {
+            name: method.sig.as_bytes().to_vec(),
+            stype: SymbolType::FUNC,
+            value: addr,
+            shndx: SymbolSectionIndex::Section(11),
+            ..Default::default()
+        };
+        sym_table.push(sym);
+    }
+
+    // sym_table.append(&mut read_il2cpp_symbols());
 
     let sym_table_len = sym_table.len();
 
@@ -119,7 +184,6 @@ fn main() {
         sym_table_len as u32,
     );
     sym_table_sec.header.addralign = 8;
-
 
     println!("Creating string table");
 
