@@ -1,83 +1,19 @@
+mod elf;
+mod inspector_metadata;
+
+use elfkit::section::Section;
 use elfkit::symbol::SymbolSectionIndex;
 use elfkit::types::{SectionFlags, SectionType, SymbolType};
 use elfkit::{elf::Elf, SectionContent, Strtab, Symbol};
-use elfkit::{section::Section};
-use serde::Deserialize;
-use std::cmp;
+use inspector_metadata::MDFile;
 use std::fs::File;
-use std::io::{Read, Seek};
-
-#[derive(Deserialize, Debug)]
-struct MDFile {
-    #[serde(rename = "addressMap")]
-    addr_map: MDAddrMap,
-}
-
-#[derive(Deserialize, Debug)]
-struct MDAddrMap {
-    #[serde(rename = "methodDefinitions")]
-    methods: Vec<MDMethod>,
-    apis: Vec<MDApiMethod>,
-    #[serde(rename = "methodInvokers")]
-    method_invokers: Vec<MDApiMethod>,
-}
-
-#[derive(Deserialize, Debug)]
-struct MDMethod {
-    #[serde(rename = "virtualAddress")]
-    virtual_addr: String,
-    name: String,
-    #[serde(rename = "signature")]
-    sig: String,
-    #[serde(rename = "dotNetSignature")]
-    dot_net_sig: String,
-}
-
-#[derive(Deserialize, Debug)]
-struct MDApiMethod {
-    #[serde(rename = "virtualAddress")]
-    virtual_addr: String,
-    name: String,
-    #[serde(rename = "signature")]
-    sig: String,
-}
-
-fn elf_load_all_sections<R>(mut io: R, elf: &mut Elf)
-where
-    R: Read + Seek,
-{
-    for section in &mut elf.sections {
-        let sec_type = match section.header.shtype.clone() {
-            // Workaround because the lib doesn't support aarch64 so we treat as raw
-            SectionType::RELA => SectionType::NULL,
-            s => s,
-        };
-        section.header.shtype = sec_type;
-        section.from_reader(&mut io, None, &elf.header).unwrap();
-    }
-}
-
-fn elf_append_section(elf: &mut Elf, mut section: Section) {
-    if elf.sections.is_empty() {
-        elf.sections.push(section);
-        return;
-    }
-
-    let last_section = elf.sections.last().unwrap();
-    let last_section_size = cmp::max(
-        last_section.content.size(&elf.header) as u64,
-        last_section.header.size,
-    );
-    // Give an extra 500 bytes of space just in case (The string table behind us is going to grow)
-    section.header.offset = last_section.header.offset + last_section_size + 500;
-    elf.sections.push(section);
-}
+use std::io::Read;
 
 fn main() {
     let mut orig_file = File::open("libil2cpp.so").unwrap();
     let mut elf = Elf::from_reader(&mut orig_file).unwrap();
 
-    elf_load_all_sections(orig_file, &mut elf);
+    elf::load_all_sections(orig_file, &mut elf);
 
     println!("Finished reading ELF");
 
@@ -158,8 +94,9 @@ fn main() {
 
     println!("Syncing sections");
 
-    elf_append_section(&mut elf, sym_table_sec);
-    elf_append_section(&mut elf, str_table_sec);
+    // Give an extra 500 bytes of space just in case (The string table behind us is going to grow)
+    elf::append_section_with_padding(&mut elf, sym_table_sec, 500);
+    elf::append_section(&mut elf, str_table_sec);
     elf.sync_all().unwrap();
 
     println!("Writing modified ELF");
