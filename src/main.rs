@@ -1,3 +1,5 @@
+#![deny(warnings, rust_2018_idioms)]
+
 mod elf;
 mod inspector_metadata;
 
