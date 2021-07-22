@@ -14,12 +14,15 @@ jobs:
           - build: linux
             os: ubuntu-latest
             rust: stable
+            extension: ''
           - build: macos
             os: macos-latest
             rust: stable
+            extension: ''
           - build: windows
             os: windows-latest
             rust: stable
+            extension: '.exe'
 
     steps:
       - uses: actions/checkout@v1
@@ -50,4 +53,5 @@ jobs:
           rustup update ${{ matrix.rust }} --no-self-update 
           rustup default ${{ matrix.rust }}
       - name: Build
-        run: cargo build
+        run: cargo build --release
+      

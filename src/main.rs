@@ -3,19 +3,21 @@
 mod elf;
 mod inspector_metadata;
 
+use anyhow::{Context, Result};
+use elfkit::elf::Elf;
 use elfkit::section::Section;
 use elfkit::symbol::SymbolSectionIndex;
 use elfkit::types::{SectionFlags, SectionType, SymbolType};
-use elfkit::{elf::Elf, SectionContent, Strtab, Symbol};
+use elfkit::{SectionContent, Strtab, Symbol};
 use inspector_metadata::MDFile;
 use std::fs::File;
 use std::io::Read;
 
-fn main() {
-    let mut orig_file = File::open("libil2cpp.so").unwrap();
+fn main() -> Result<()> {
+    let mut orig_file = File::open("libil2cpp.so").context("Error opening libil2cpp.so")?;
     let mut elf = Elf::from_reader(&mut orig_file).unwrap();
 
-    elf::load_all_sections(orig_file, &mut elf);
+    elf::load_all_sections(orig_file, &mut elf)?;
 
     println!("Finished reading ELF");
 
@@ -23,13 +25,12 @@ fn main() {
 
     let mut md_str = String::new();
     File::open("metadata.json")
-        .unwrap()
-        .read_to_string(&mut md_str)
-        .unwrap();
-    let md: MDFile = serde_json::from_str(&md_str).unwrap();
+        .context("Error opening metadata.json")?
+        .read_to_string(&mut md_str)?;
+    let md: MDFile = serde_json::from_str(&md_str)?;
 
     for method in md.addr_map.methods {
-        let addr = u64::from_str_radix(&method.virtual_addr[2..], 16).unwrap();
+        let addr = u64::from_str_radix(&method.virtual_addr[2..], 16)?;
         let sym = Symbol {
             name: method.sig.as_bytes().to_vec(),
             stype: SymbolType::FUNC,
@@ -41,7 +42,7 @@ fn main() {
     }
 
     for method in md.addr_map.apis {
-        let addr = u64::from_str_radix(&method.virtual_addr[2..], 16).unwrap();
+        let addr = u64::from_str_radix(&method.virtual_addr[2..], 16)?;
         let sym = Symbol {
             name: method.sig.as_bytes().to_vec(),
             stype: SymbolType::FUNC,
@@ -53,7 +54,7 @@ fn main() {
     }
 
     for method in md.addr_map.method_invokers {
-        let addr = u64::from_str_radix(&method.virtual_addr[2..], 16).unwrap();
+        let addr = u64::from_str_radix(&method.virtual_addr[2..], 16)?;
         let sym = Symbol {
             name: method.sig.as_bytes().to_vec(),
             stype: SymbolType::FUNC,
@@ -97,14 +98,16 @@ fn main() {
     println!("Syncing sections");
 
     // Give an extra 500 bytes of space just in case (The string table behind us is going to grow)
-    elf::append_section_with_padding(&mut elf, sym_table_sec, 500);
-    elf::append_section(&mut elf, str_table_sec);
+    elf::append_section_with_padding(&mut elf, sym_table_sec, 500)?;
+    elf::append_section(&mut elf, str_table_sec)?;
     elf.sync_all().unwrap();
 
     println!("Writing modified ELF");
 
-    let output_file = File::create("libil2cpp.sym.so").unwrap();
+    let output_file = File::create("libil2cpp.sym.so")?;
     elf.to_writer(output_file).unwrap();
 
     println!("Done!");
+
+    Ok(())
 }
